@@ -21,7 +21,7 @@ const createTestQueryClient = () => new QueryClient({
   },
 })
 
-const renderWithClient = (ui, options) => {
+const renderWithProviders = (ui, options) => {
   const queryClient = createTestQueryClient()
   
   const AllTheProviders = ({ children }) => (

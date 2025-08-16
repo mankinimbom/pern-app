@@ -25,6 +25,7 @@ const UserForm = ({ user, onSuccess, onCancel }) => {
       onSuccess?.()
     } catch (error) {
       // Error is handled by axios interceptor
+      // eslint-disable-next-line no-console
       console.error('Form submission error:', error)
     }
   }

@@ -73,6 +73,7 @@ const UsersList = () => {
         await usersAPI.delete(userId)
         queryClient.invalidateQueries('users')
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Delete error:', error)
       }
     }

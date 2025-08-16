@@ -1,4 +1,5 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -11,6 +12,7 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
+    // eslint-disable-next-line no-console
     console.error('Error Boundary caught an error:', error, errorInfo)
   }
 
@@ -20,7 +22,7 @@ class ErrorBoundary extends React.Component {
         <div className="error-boundary">
           <div className="error-container">
             <h2>Oops! Something went wrong</h2>
-            <p>We're sorry for the inconvenience. Please try refreshing the page.</p>
+            <p>We&apos;re sorry for the inconvenience. Please try refreshing the page.</p>
             <details style={{ whiteSpace: 'pre-wrap', marginTop: '1rem' }}>
               <summary>Error Details</summary>
               {this.state.error && this.state.error.toString()}
@@ -38,6 +40,10 @@ class ErrorBoundary extends React.Component {
 
     return this.props.children
   }
+}
+
+ErrorBoundary.propTypes = {
+  children: PropTypes.node.isRequired
 }
 
 export default ErrorBoundary

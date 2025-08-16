@@ -1,17 +1,27 @@
+import React from 'react'
+import PropTypes from 'prop-types'
 import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from 'react-query'
 import App from '../App'
 
-// Create a test query client
+// Mock the API
+vi.mock('../services/api', () => ({
+  usersAPI: {
+    getAll: vi.fn(() => Promise.resolve([])),
+  },
+  healthAPI: {
+    check: vi.fn(() => Promise.resolve({ status: 'healthy' })),
+  }
+}))
+
 const createTestQueryClient = () => new QueryClient({
   defaultOptions: {
-    queries: {
-      retry: false,
-    },
+    queries: { retry: false },
+    mutations: { retry: false },
   },
 })
 
-const renderWithProviders = (ui, options = {}) => {
+const renderWithClient = (ui, options) => {
   const queryClient = createTestQueryClient()
   
   const AllTheProviders = ({ children }) => (
@@ -19,6 +29,10 @@ const renderWithProviders = (ui, options = {}) => {
       {children}
     </QueryClientProvider>
   )
+
+  AllTheProviders.propTypes = {
+    children: PropTypes.node.isRequired
+  }
 
   return render(ui, { wrapper: AllTheProviders, ...options })
 }

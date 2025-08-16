@@ -1,4 +1,5 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 import { useForm } from 'react-hook-form'
 import { usersAPI } from '../services/api'
 import { toast } from 'react-toastify'
@@ -86,6 +87,20 @@ const UserForm = ({ user, onSuccess, onCancel }) => {
       </div>
     </form>
   )
+}
+
+UserForm.propTypes = {
+  user: PropTypes.shape({
+    id: PropTypes.number,
+    name: PropTypes.string,
+    email: PropTypes.string
+  }),
+  onSuccess: PropTypes.func.isRequired,
+  onCancel: PropTypes.func.isRequired
+}
+
+UserForm.defaultProps = {
+  user: null
 }
 
 export default UserForm

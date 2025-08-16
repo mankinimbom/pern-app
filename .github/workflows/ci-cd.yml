@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
 env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/mankinimbom

@@ -1,6 +1,7 @@
 {
   "name": "pern-backend",
   "version": "1.0.0",
+  "description": "Backend API for PERN stack application",
   "type": "module",
   "scripts": {
     "dev": "nodemon src/index.js",

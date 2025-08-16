@@ -107,12 +107,13 @@ jobs:
           cd apps/backend
           npm run lint --if-present
       
-      - name: Run database migrations
+      - name: Setup database
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
         run: |
           cd apps/backend
-          npx prisma migrate deploy
+          npx prisma generate
+          npx prisma db push --force-reset
       
       - name: Run tests
         env:

@@ -36,8 +36,7 @@
     {
       "files": ["**/__tests__/**/*", "**/*.test.*", "**/test-setup.js"],
       "env": {
-        "jest": true,
-        "vitest/globals": true
+        "jest": true
       },
       "globals": {
         "vi": "readonly",

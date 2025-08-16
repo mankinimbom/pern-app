@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-pern-app
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  pern-app-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "PERN Application Monitoring",
+        "tags": ["pern", "application"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Request Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(rate(nginx_ingress_controller_requests{service=~\"backend-service|frontend-service\"}[5m]))",
+                "legendFormat": "Requests/sec"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Error Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(rate(nginx_ingress_controller_requests{service=~\"backend-service|frontend-service\",status=~\"5..\"}[5m])) / sum(rate(nginx_ingress_controller_requests{service=~\"backend-service|frontend-service\"}[5m])) * 100",
+                "legendFormat": "Error %"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Response Time",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(nginx_ingress_controller_request_duration_seconds_bucket{service=\"backend-service\"}[5m])) by (le))",
+                "legendFormat": "Backend 95th percentile"
+              },
+              {
+                "expr": "histogram_quantile(0.50, sum(rate(nginx_ingress_controller_request_duration_seconds_bucket{service=\"backend-service\"}[5m])) by (le))",
+                "legendFormat": "Backend 50th percentile"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Pod Resource Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(container_memory_usage_bytes{pod=~\"backend-.*|frontend-.*\"}) by (pod)",
+                "legendFormat": "Memory Usage - {{pod}}"
+              },
+              {
+                "expr": "sum(rate(container_cpu_usage_seconds_total{pod=~\"backend-.*|frontend-.*\"}[5m])) by (pod)",
+                "legendFormat": "CPU Usage - {{pod}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }

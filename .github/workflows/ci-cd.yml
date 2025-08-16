@@ -47,10 +47,21 @@ jobs:
           cd apps/frontend
           npm ci
       
+      - name: Run linting
+        run: |
+          cd apps/frontend
+          npm run lint --if-present
+      
       - name: Run tests
         run: |
           cd apps/frontend
-          npm run test -- --run
+          npm run test -- --run --coverage
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./apps/frontend/coverage/lcov.info
+          flags: frontend
 
   test-backend:
     needs: detect-changes
@@ -69,6 +80,15 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -82,6 +102,11 @@ jobs:
           cd apps/backend
           npm ci
       
+      - name: Run linting
+        run: |
+          cd apps/backend
+          npm run lint --if-present
+      
       - name: Run database migrations
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
@@ -92,9 +117,17 @@ jobs:
       - name: Run tests
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret
         run: |
           cd apps/backend
-          npm run test
+          npm run test -- --coverage
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./apps/backend/coverage/lcov.info
+          flags: backend
 
   security-scan:
     needs: [test-frontend, test-backend]
@@ -116,6 +149,17 @@ jobs:
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
+      
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/init@v2
+        with:
+          languages: javascript
+      
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
+      
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
 
   build-and-push:
     needs: [detect-changes, security-scan]
@@ -147,6 +191,8 @@ jobs:
             type=ref,event=pr
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
       
       - name: Build and push Docker image
         if: needs.detect-changes.outputs[matrix.component] == 'true' || needs.detect-changes.outputs.k8s == 'true'
@@ -159,6 +205,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
       
       - name: Run Trivy vulnerability scanner on image
         if: needs.detect-changes.outputs[matrix.component] == 'true' || needs.detect-changes.outputs.k8s == 'true'
@@ -174,25 +222,65 @@ jobs:
         with:
           sarif_file: 'trivy-${{ matrix.component }}-results.sarif'
 
-  update-gitops:
+  deploy-staging:
     needs: [build-and-push]
-    if: success() && github.ref == 'refs/heads/main'
+    if: success() && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
+    environment: staging
     steps:
       - uses: actions/checkout@v4
         with:
           repository: mankinimbom/pern-gitops
           token: ${{ secrets.GITOPS_TOKEN }}
       
-      - name: Update image tags
+      - name: Update staging image tags
         run: |
-          sed -i "s|image: ghcr.io/mankinimbom/pern-frontend:.*|image: ghcr.io/mankinimbom/pern-frontend:${{ github.sha }}|g" apps/pern-app/overlays/production/kustomization.yaml
-          sed -i "s|image: ghcr.io/mankinimbom/pern-backend:.*|image: ghcr.io/mankinimbom/pern-backend:${{ github.sha }}|g" apps/pern-app/overlays/production/kustomization.yaml
+          sed -i "s|newTag: .*|newTag: ${{ github.sha }}|g" apps/pern-app/overlays/staging/kustomization.yaml
       
-      - name: Commit and push
+      - name: Commit and push to staging
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add .
-          git commit -m "Update image tags to ${{ github.sha }}" || exit 0
+          git commit -m "Update staging image tags to ${{ github.sha }}" || exit 0
           git push
+
+  deploy-production:
+    needs: [build-and-push]
+    if: success() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: mankinimbom/pern-gitops
+          token: ${{ secrets.GITOPS_TOKEN }}
+      
+      - name: Update production image tags
+        run: |
+          sed -i "s|newTag: .*|newTag: ${{ github.sha }}|g" apps/pern-app/overlays/production/kustomization.yaml
+      
+      - name: Commit and push to production
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "Update production image tags to ${{ github.sha }}" || exit 0
+          git push
+
+  notify:
+    needs: [deploy-staging, deploy-production]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify deployment status
+        uses: 8398a7/action-slack@v3
+        if: always()
+        with:
+          status: ${{ job.status }}
+          text: |
+            Deployment Status: ${{ job.status }}
+            Branch: ${{ github.ref }}
+            Commit: ${{ github.sha }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

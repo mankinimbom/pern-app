@@ -6,7 +6,7 @@ metadata:
 data:
   pern-app.yml: |
     groups:
-    - name: pern-app
+    - name: pern-app-alerts
       rules:
       - alert: HighErrorRate
         expr: |
@@ -17,6 +17,83 @@ data:
         for: 2m
         labels:
           severity: critical
+          service: pern-app
         annotations:
-          summary: "High error rate detected"
+          summary: "High error rate detected in PERN application"
           description: "Error rate is {{ $value | humanizePercentage }} for the last 2 minutes"
+          runbook_url: "https://docs.ankinimbom.com/runbooks/high-error-rate"
+      
+      - alert: HighResponseTime
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(nginx_ingress_controller_request_duration_seconds_bucket{service="backend-service"}[5m])) 
+            by (le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: pern-app
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s"
+      
+      - alert: PodCrashLooping
+        expr: |
+          increase(kube_pod_container_status_restarts_total{namespace="pern-app"}[15m]) > 3
+        for: 5m
+        labels:
+          severity: critical
+          service: pern-app
+        annotations:
+          summary: "Pod {{ $labels.pod }} is crash looping"
+          description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last 15 minutes"
+      
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            container_memory_usage_bytes{namespace="pern-app",container!=""} / 
+            container_spec_memory_limit_bytes{namespace="pern-app",container!=""} * 100
+          ) > 90
+        for: 10m
+        labels:
+          severity: warning
+          service: pern-app
+        annotations:
+          summary: "High memory usage detected"
+          description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is using {{ $value }}% of its memory limit"
+      
+      - alert: DatabaseConnectionFailure
+        expr: |
+          absent(up{job="postgresql"}) or up{job="postgresql"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: pern-app
+        annotations:
+          summary: "Database connection failure"
+          description: "PostgreSQL database is not reachable"
+      
+      - alert: RedisConnectionFailure
+        expr: |
+          absent(up{job="redis"}) or up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: pern-app
+        annotations:
+          summary: "Redis connection failure"
+          description: "Redis cache is not reachable"
+      
+      - alert: LowDiskSpace
+        expr: |
+          (
+            (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"}) /
+            node_filesystem_size_bytes{mountpoint="/"} * 100
+          ) > 85
+        for: 10m
+        labels:
+          severity: warning
+          service: infrastructure
+        annotations:
+          summary: "Low disk space"
+          description: "Disk usage is {{ $value }}% on node {{ $labels.instance }}"

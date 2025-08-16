@@ -1,25 +1,30 @@
 FROM node:18-alpine AS base
 
-# Install security updates
-RUN apk update && apk upgrade && apk add --no-cache dumb-init
+# Install security updates and required tools
+RUN apk update && apk upgrade && \
+    apk add --no-cache dumb-init curl && \
+    rm -rf /var/cache/apk/*
 
-# Create app directory
+# Create app directory and user
 WORKDIR /app
-
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodeuser -u 1001
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodeuser -u 1001
 
 # Copy package files
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install dependencies and generate Prisma client
-RUN npm ci --only=production && npm cache clean --force
-RUN npx prisma generate
+# Install dependencies
+RUN npm ci --only=production && \
+    npm cache clean --force && \
+    npx prisma generate
 
-# Copy source code
+# Copy source code and set ownership
 COPY --chown=nodeuser:nodejs src ./src/
+COPY --chown=nodeuser:nodejs healthcheck.js ./
+
+# Create logs directory
+RUN mkdir -p logs && chown nodeuser:nodejs logs
 
 # Switch to non-root user
 USER nodeuser

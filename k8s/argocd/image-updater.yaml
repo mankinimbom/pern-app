@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-image-updater-config
+  namespace: argocd
+data:
+  registries.conf: |
+    registries:
+    - name: GitHub Container Registry
+      prefix: ghcr.io
+      api_url: https://ghcr.io
+      credentials: pullsecret:argocd/ghcr-secret
+      defaultns: library
+  
+  applications.yaml: |
+    applications:
+    - name: pern-app-production
+      image_list:
+      - ghcr.io/mankinimbom/pern-frontend
+      - ghcr.io/mankinimbom/pern-backend
+      update_strategy: latest
+      ignore_tags:
+      - latest
+      - main
+      write_back_method: git
+      git_branch: main
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ghcr-secret
+  namespace: argocd
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: # Base64 encoded Docker config JSON

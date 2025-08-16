@@ -17,7 +17,6 @@ import {
   createUserSchema, 
   updateUserSchema, 
   createPostSchema, 
-  updatePostSchema, 
   idSchema 
 } from './validation/schemas.js'
 

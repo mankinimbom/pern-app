@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function main() {
+  // eslint-disable-next-line no-console
   console.log('Seeding database...')
   
   // Create users
@@ -38,12 +39,15 @@ async function main() {
     }
   })
 
+  // eslint-disable-next-line no-console
   console.log('Database seeded successfully!')
+  // eslint-disable-next-line no-console
   console.log({ user1, user2 })
 }
 
 main()
   .catch((e) => {
+    // eslint-disable-next-line no-console
     console.error(e)
     process.exit(1)
   })

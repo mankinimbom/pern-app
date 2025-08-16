@@ -1,12 +1,13 @@
-import { PrismaClient } from '@prisma/client'
 import { execSync } from 'child_process'
+
+// Set test database URL before importing Prisma
+process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/pern_test'
+
+import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
 beforeAll(async () => {
-  // Set test database URL
-  process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/pern_test'
-  
   // Run migrations
   execSync('npx prisma migrate deploy', { stdio: 'inherit' })
 })

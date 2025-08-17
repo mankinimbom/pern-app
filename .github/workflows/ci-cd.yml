@@ -195,9 +195,28 @@ jobs:
         with:
           images: ${{ env.IMAGE_PREFIX }}/pern-${{ matrix.component }}
           tags: |
+            # Branch-based tags
             type=ref,event=branch
             type=ref,event=pr
+            # SHA-based tags for unique identification
             type=sha,prefix={{branch}}-
+            # Date-based tags for ArgoCD tracking
+            type=raw,value={{date 'YYYYMMDD-HHmmss'}}-{{sha}}
+            # Latest tag for main branch
+            type=raw,value=latest,enable={{is_default_branch}}
+            # Semantic versioning tags
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+          labels: |
+            org.opencontainers.image.title=PERN ${{ matrix.component }}
+            org.opencontainers.image.description=PERN Stack ${{ matrix.component }} component
+            org.opencontainers.image.vendor=mankinimbom
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created={{date 'YYYY-MM-DDTHH:mm:ss.sssZ'}}
+            # ArgoCD-specific labels for better tracking
+            argocd.image-updater.argoproj.io/platforms=linux/amd64
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}

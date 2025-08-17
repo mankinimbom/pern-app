@@ -6,9 +6,24 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}Creating Kubernetes secrets with proper security...${NC}"
+
+# Check if required environment variables are set
+if [ -z "$GITHUB_TOKEN" ]; then
+    echo -e "${RED}ERROR: GITHUB_TOKEN environment variable is required for GitOps integration${NC}"
+    echo -e "${YELLOW}Please set: export GITHUB_TOKEN=your_github_personal_access_token${NC}"
+    echo -e "${YELLOW}Token needs permissions: repo, workflow, write:packages${NC}"
+    exit 1
+fi
+
+if [ -z "$GITHUB_USERNAME" ]; then
+    echo -e "${RED}ERROR: GITHUB_USERNAME environment variable is required${NC}"
+    echo -e "${YELLOW}Please set: export GITHUB_USERNAME=your_github_username${NC}"
+    exit 1
+fi
 
 # Generate secure passwords
 POSTGRES_PASSWORD=$(openssl rand -base64 32)
@@ -56,17 +71,28 @@ kubectl create secret generic backend-secret \
 
 # GitHub Container Registry secret for ArgoCD Image Updater
 echo -e "${YELLOW}Creating GitHub Container Registry secret...${NC}"
-if [ -z "$GITHUB_TOKEN" ]; then
-    echo "Please enter your GitHub Personal Access Token with packages:read permission:"
-    read -s GITHUB_TOKEN
-fi
 
 kubectl create secret docker-registry ghcr-secret \
     --docker-server=ghcr.io \
-    --docker-username=mankinimbom \
+    --docker-username="$GITHUB_USERNAME" \
     --docker-password="$GITHUB_TOKEN" \
     --namespace=argocd \
     --dry-run=client -o yaml | kubectl apply -f -
+
+# GitOps repository access secret for ArgoCD Image Updater
+echo -e "${BLUE}Creating GitOps repository access secret...${NC}"
+kubectl create secret generic gitops-secret \
+    --from-literal=username="$GITHUB_USERNAME" \
+    --from-literal=password="$GITHUB_TOKEN" \
+    --from-literal=url="https://github.com/mankinimbom/pern-gitops" \
+    --namespace=argocd \
+    --dry-run=client -o yaml | kubectl apply -f -
+
+# Add labels to the GitOps secret for ArgoCD recognition
+kubectl label secret gitops-secret \
+    argocd.argoproj.io/secret-type=repository \
+    --namespace=argocd \
+    --overwrite=true || true
 
 # TLS certificate secret (using cert-manager)
 echo -e "${YELLOW}Creating certificate issuer...${NC}"

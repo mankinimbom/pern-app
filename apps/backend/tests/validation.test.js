@@ -37,7 +37,7 @@ describe('Validation Schemas', () => {
     it('should require name and email', () => {
       const invalidData = {}
 
-      const { error } = createUserSchema.validate(invalidData)
+      const { error } = createUserSchema.validate(invalidData, { abortEarly: false })
       expect(error).toBeDefined()
       expect(error.details).toHaveLength(2)
     })

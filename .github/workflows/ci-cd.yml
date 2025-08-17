@@ -251,8 +251,8 @@ jobs:
       #     sarif_file: 'trivy-${{ matrix.component }}-results.sarif'
 
   deploy-staging:
-    needs: [build-and-push]
-    if: always() && needs.build-and-push.result == 'success' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+    needs: build-and-push
+    if: always() && needs.build-and-push.result == 'success'
     runs-on: ubuntu-latest
     environment: staging
     steps:
@@ -260,18 +260,42 @@ jobs:
         with:
           repository: mankinimbom/pern-gitops
           token: ${{ secrets.GITOPS_TOKEN }}
+          fetch-depth: 0
+      
+      - name: Configure Git
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
       
       - name: Update staging image tags
         run: |
+          echo "Updating staging images to SHA: ${{ github.sha }}"
+          
+          # Update kustomization.yaml with new image tags
           sed -i "s|newTag: .*|newTag: ${{ github.sha }}|g" apps/pern-app/overlays/staging/kustomization.yaml
+          
+          # Verify the changes
+          echo "Updated kustomization.yaml:"
+          cat apps/pern-app/overlays/staging/kustomization.yaml
       
       - name: Commit and push to staging
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          git commit -m "Update staging image tags to ${{ github.sha }}" || exit 0
-          git push
+          git add apps/pern-app/overlays/staging/kustomization.yaml
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          
+          git commit -m "🚀 Deploy to staging: update images to ${{ github.sha }}
+
+          - Frontend: ghcr.io/mankinimbom/pern-frontend:${{ github.sha }}
+          - Backend: ghcr.io/mankinimbom/pern-backend:${{ github.sha }}
+          - Source: ${{ github.repository }}@${{ github.sha }}
+          - Trigger: ${{ github.event_name }} by ${{ github.actor }}"
+          
+          git push origin main
       
       - name: Update staging image tags
         run: |
@@ -295,18 +319,43 @@ jobs:
         with:
           repository: mankinimbom/pern-gitops
           token: ${{ secrets.GITOPS_TOKEN }}
+          fetch-depth: 0
+      
+      - name: Configure Git
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
       
       - name: Update production image tags
         run: |
+          echo "Updating production images to SHA: ${{ github.sha }}"
+          
+          # Update kustomization.yaml with new image tags
           sed -i "s|newTag: .*|newTag: ${{ github.sha }}|g" apps/pern-app/overlays/production/kustomization.yaml
+          
+          # Verify the changes
+          echo "Updated kustomization.yaml:"
+          cat apps/pern-app/overlays/production/kustomization.yaml
       
       - name: Commit and push to production
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          git commit -m "Update production image tags to ${{ github.sha }}" || exit 0
-          git push
+          git add apps/pern-app/overlays/production/kustomization.yaml
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          
+          git commit -m "🎯 Deploy to production: update images to ${{ github.sha }}
+
+          - Frontend: ghcr.io/mankinimbom/pern-frontend:${{ github.sha }}
+          - Backend: ghcr.io/mankinimbom/pern-backend:${{ github.sha }}
+          - Source: ${{ github.repository }}@${{ github.sha }}
+          - Trigger: Production deployment approved by ${{ github.actor }}
+          - Previous staging deployment: ✅ Successful"
+          
+          git push origin main
           git push
 
   notify:

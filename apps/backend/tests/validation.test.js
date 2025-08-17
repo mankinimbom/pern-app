@@ -1,4 +1,4 @@
-import { createUserSchema, updateUserSchema, idSchema } from '../src/validation/schemas.js'
+import { createUserSchema, idSchema } from '../src/validation/schemas.js'
 
 describe('Validation Schemas', () => {
   describe('createUserSchema', () => {

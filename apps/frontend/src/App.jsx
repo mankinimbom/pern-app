@@ -3,11 +3,11 @@ import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from 'reac
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
+import './App.css'
 import ErrorBoundary from './components/ErrorBoundary'
 import LoadingSpinner from './components/LoadingSpinner'
 import UserForm from './components/UserForm'
-import { usersAPI, healthAPI } from './services/api'
-import './App.css'
+import { healthAPI, usersAPI } from './services/api'
 
 // Create a client
 const queryClient = new QueryClient({

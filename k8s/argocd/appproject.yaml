@@ -12,6 +12,10 @@ spec:
   destinations:
   - namespace: 'pern-app'
     server: 'https://kubernetes.default.svc'
+  - namespace: 'pern-app-staging'
+    server: 'https://kubernetes.default.svc'
+  - namespace: 'pern-app-production'
+    server: 'https://kubernetes.default.svc'
   - namespace: 'argocd'
     server: 'https://kubernetes.default.svc'
   
@@ -32,14 +36,28 @@ spec:
     kind: ConfigMap
   - group: ''
     kind: PersistentVolumeClaim
+  - group: ''
+    kind: ServiceAccount
   - group: apps
     kind: Deployment
+  - group: apps
+    kind: StatefulSet
   - group: argoproj.io
     kind: Rollout
   - group: networking.k8s.io
     kind: Ingress
+  - group: networking.k8s.io
+    kind: NetworkPolicy
   - group: autoscaling
     kind: HorizontalPodAutoscaler
+  - group: policy
+    kind: PodDisruptionBudget
+  - group: monitoring.coreos.com
+    kind: ServiceMonitor
+  - group: external-secrets.io
+    kind: SecretStore
+  - group: external-secrets.io
+    kind: ExternalSecret
   
   roles:
   - name: admin

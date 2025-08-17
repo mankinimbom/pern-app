@@ -1,23 +1,23 @@
-import express from 'express'
-import cors from 'cors'
-import helmet from 'helmet'
-import compression from 'compression'
-import rateLimit from 'express-rate-limit'
-import morgan from 'morgan'
-import session from 'express-session'
-import RedisStore from 'connect-redis'
-import { createClient } from 'redis'
 import { PrismaClient } from '@prisma/client'
+import compression from 'compression'
+import RedisStore from 'connect-redis'
+import cors from 'cors'
 import dotenv from 'dotenv'
+import express from 'express'
+import rateLimit from 'express-rate-limit'
+import session from 'express-session'
+import helmet from 'helmet'
+import morgan from 'morgan'
+import { createClient } from 'redis'
 
 // Import custom middleware and config
 import logger from './config/logger.js'
-import { errorHandler, notFoundHandler, asyncHandler, validate } from './middleware/errorHandler.js'
-import { 
-  createUserSchema, 
-  updateUserSchema, 
-  createPostSchema, 
-  idSchema 
+import { asyncHandler, errorHandler, notFoundHandler, validate } from './middleware/errorHandler.js'
+import {
+    createPostSchema,
+    createUserSchema,
+    idSchema,
+    updateUserSchema
 } from './validation/schemas.js'
 
 dotenv.config()

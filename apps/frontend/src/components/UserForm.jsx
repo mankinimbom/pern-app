@@ -1,8 +1,7 @@
-import React from 'react'
 import PropTypes from 'prop-types'
 import { useForm } from 'react-hook-form'
-import { usersAPI } from '../services/api'
 import { toast } from 'react-toastify'
+import { usersAPI } from '../services/api'
 
 const UserForm = ({ user, onSuccess, onCancel }) => {
   const {

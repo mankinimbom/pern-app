@@ -1,6 +1,5 @@
-import request from 'supertest'
 import express from 'express'
-import { PrismaClient } from '@prisma/client'
+import request from 'supertest'
 import { prisma } from './setup.js'
 
 // Import the main app (we'll need to refactor index.js to export the app)

@@ -86,7 +86,7 @@ spec:
               key: interval
               name: argocd-image-updater-config
               optional: true
-        image: quay.io/argoproj/argocd-image-updater:v0.12.2
+        image: quay.io/argoproj/argocd-image-updater:v0.13.0
         imagePullPolicy: Always
         livenessProbe:
           httpGet:

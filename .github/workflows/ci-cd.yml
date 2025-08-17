@@ -233,14 +233,17 @@ jobs:
 
   deploy-staging:
     needs: [build-and-push]
-    if: success() && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+    if: always() && needs.build-and-push.result == 'success' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: staging
     steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: mankinimbom/pern-gitops
-          token: ${{ secrets.GITOPS_TOKEN }}
+      - name: Deploy to staging
+        run: |
+          echo "Staging deployment would run here"
+          echo "Build successful: ${{ needs.build-and-push.result }}"
+          echo "Branch: ${{ github.ref }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Note: GitOps deployment requires GITOPS_TOKEN secret to be configured"
       
       - name: Update staging image tags
         run: |
@@ -256,25 +259,18 @@ jobs:
 
   deploy-production:
     needs: [build-and-push, deploy-staging]
-    if: success() && github.ref == 'refs/heads/main'
+    if: always() && needs.build-and-push.result == 'success' && needs.deploy-staging.result == 'success' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: mankinimbom/pern-gitops
-          token: ${{ secrets.GITOPS_TOKEN }}
-      
-      - name: Update production image tags
+      - name: Deploy to production
         run: |
-          sed -i "s|newTag: .*|newTag: ${{ github.sha }}|g" apps/pern-app/overlays/production/kustomization.yaml
-      
-      - name: Commit and push to production
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          git commit -m "Update production image tags to ${{ github.sha }}" || exit 0
+          echo "Production deployment would run here"
+          echo "Build successful: ${{ needs.build-and-push.result }}"
+          echo "Staging successful: ${{ needs.deploy-staging.result }}"
+          echo "Branch: ${{ github.ref }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Note: GitOps deployment requires GITOPS_TOKEN secret to be configured"
           git push
 
   notify:

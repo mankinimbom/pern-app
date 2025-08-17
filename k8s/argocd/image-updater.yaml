@@ -37,12 +37,5 @@ data:
   interval: "2m"
   health.port: "8080"
   metrics.port: "8081"
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ghcr-secret
-  namespace: argocd
-type: kubernetes.io/dockerconfigjson
-data:
-  .dockerconfigjson: # Base64 encoded Docker config JSON
+# The ghcr-secret is created by the create-secrets.sh script
+# This file only contains the ConfigMap configuration

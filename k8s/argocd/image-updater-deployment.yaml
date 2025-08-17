@@ -137,9 +137,6 @@ spec:
           items:
           - key: registries.conf
             path: registries.conf
-          - key: git.commit-message-template
-            path: commit.template
-            optional: true
           name: argocd-image-updater-config
           optional: true
         name: image-updater-conf

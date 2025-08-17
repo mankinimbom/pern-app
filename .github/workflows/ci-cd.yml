@@ -237,13 +237,22 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     steps:
-      - name: Deploy to staging
+      - uses: actions/checkout@v4
+        with:
+          repository: mankinimbom/pern-gitops
+          token: ${{ secrets.GITOPS_TOKEN }}
+      
+      - name: Update staging image tags
         run: |
-          echo "Staging deployment would run here"
-          echo "Build successful: ${{ needs.build-and-push.result }}"
-          echo "Branch: ${{ github.ref }}"
-          echo "Commit: ${{ github.sha }}"
-          echo "Note: GitOps deployment requires GITOPS_TOKEN secret to be configured"
+          sed -i "s|newTag: .*|newTag: ${{ github.sha }}|g" apps/pern-app/overlays/staging/kustomization.yaml
+      
+      - name: Commit and push to staging
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "Update staging image tags to ${{ github.sha }}" || exit 0
+          git push
       
       - name: Update staging image tags
         run: |
@@ -263,14 +272,22 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Deploy to production
+      - uses: actions/checkout@v4
+        with:
+          repository: mankinimbom/pern-gitops
+          token: ${{ secrets.GITOPS_TOKEN }}
+      
+      - name: Update production image tags
         run: |
-          echo "Production deployment would run here"
-          echo "Build successful: ${{ needs.build-and-push.result }}"
-          echo "Staging successful: ${{ needs.deploy-staging.result }}"
-          echo "Branch: ${{ github.ref }}"
-          echo "Commit: ${{ github.sha }}"
-          echo "Note: GitOps deployment requires GITOPS_TOKEN secret to be configured"
+          sed -i "s|newTag: .*|newTag: ${{ github.sha }}|g" apps/pern-app/overlays/production/kustomization.yaml
+      
+      - name: Commit and push to production
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "Update production image tags to ${{ github.sha }}" || exit 0
+          git push
           git push
 
   notify:
@@ -280,7 +297,7 @@ jobs:
     steps:
       - name: Notify deployment status
         uses: 8398a7/action-slack@v3
-        if: false  # Disabled until SLACK_WEBHOOK_URL secret is configured
+        if: false  # Disabled - focusing on core GitOps functionality
         with:
           status: ${{ job.status }}
           text: |

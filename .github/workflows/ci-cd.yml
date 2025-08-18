@@ -296,18 +296,6 @@ jobs:
           - Trigger: ${{ github.event_name }} by ${{ github.actor }}"
           
           git push origin main
-      
-      - name: Update staging image tags
-        run: |
-          sed -i "s|newTag: .*|newTag: ${{ github.sha }}|g" apps/pern-app/overlays/staging/kustomization.yaml
-      
-      - name: Commit and push to staging
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          git commit -m "Update staging image tags to ${{ github.sha }}" || exit 0
-          git push
 
   deploy-production:
     needs: [build-and-push, deploy-staging]
@@ -356,7 +344,6 @@ jobs:
           - Previous staging deployment: ✅ Successful"
           
           git push origin main
-          git push
 
   notify:
     needs: [deploy-staging, deploy-production]

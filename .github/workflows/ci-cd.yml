@@ -1,6 +1,5 @@
 name: Enhanced CI/CD Pipeline with ArgoCD Integration
 
-# CI/CD pipeline for PERN stack with GitOps integration
 on:
   push:
     branches: [ main, develop ]
@@ -132,6 +131,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       image-tag: ${{ steps.version.outputs.image-tag }}
+      short-sha: ${{ steps.version.outputs.short-sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -140,35 +140,23 @@ jobs:
       - name: Generate enhanced version tags for ArgoCD
         id: version
         run: |
+          SHORT_SHA=${GITHUB_SHA:0:7}
+          
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            # Get the latest tag or default to 0.1.0
-            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
-            LATEST_TAG=${LATEST_TAG#v}  # Remove 'v' prefix
-            
-            # Ensure we have a valid semver base
-            if [[ ! $LATEST_TAG =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              LATEST_TAG="0.1.0"
-            fi
-            
-            # Create timestamp-based pre-release version
-            TIMESTAMP=$(date +%Y%m%d%H%M%S)
-            SHORT_SHA=${GITHUB_SHA:0:7}
-            
-            # Generate valid semver pre-release version
-            VERSION="${LATEST_TAG}-alpha.${TIMESTAMP}.${SHORT_SHA}"
-            IMAGE_TAG="v${VERSION}"
+            # Use commit SHA as primary tag for GitOps consistency
+            IMAGE_TAG="${SHORT_SHA}"
+            VERSION="${SHORT_SHA}"
           else
             # Branch-based tags for non-main branches  
             BRANCH_NAME="${{ github.ref_name }}"
-            SHORT_SHA=${GITHUB_SHA:0:7}
             TIMESTAMP=$(date +%Y%m%d%H%M%S)
-            VERSION="0.0.0-${BRANCH_NAME}.${TIMESTAMP}.${SHORT_SHA}"
-            IMAGE_TAG="v${VERSION}"
+            IMAGE_TAG="${BRANCH_NAME}-${TIMESTAMP}-${SHORT_SHA}"
+            VERSION="${BRANCH_NAME}-${TIMESTAMP}-${SHORT_SHA}"
           fi
           
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
-          echo "short-sha=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+          echo "short-sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -186,8 +174,6 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/pern-${{ matrix.component }}
           tags: |
-            type=semver,pattern={{version}},value=v${{ steps.version.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=v${{ steps.version.outputs.version }}
             type=raw,value=${{ steps.version.outputs.image-tag }}
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
@@ -205,70 +191,64 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
 
-      - name: Store image references
-        run: |
-          mkdir -p /tmp/images
-          echo "${{ env.REGISTRY }}/${{ github.repository_owner }}/pern-${{ matrix.component }}:${{ steps.version.outputs.image-tag }}" > /tmp/images/${{ matrix.component }}-image.txt
-
-      - name: Upload image references
-        uses: actions/upload-artifact@v4
-        with:
-          name: image-refs-${{ matrix.component }}
-          path: /tmp/images/${{ matrix.component }}-image.txt
-
-  deploy-staging:
+  update-gitops:
+    name: Update GitOps Repository
     needs: [build-and-push, detect-changes]
-    if: needs.detect-changes.outputs.any == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: 
-      name: staging
+    if: needs.detect-changes.outputs.any == 'true' && github.ref == 'refs/heads/main'
+    
     steps:
-      - name: Checkout GitOps repository
+      - name: Checkout GitOps Repository
         uses: actions/checkout@v4
         with:
           repository: ${{ env.GITOPS_REPO }}
           token: ${{ secrets.GITOPS_TOKEN }}
           fetch-depth: 0
 
-      - name: Download image references
-        uses: actions/download-artifact@v4
-        with:
-          path: /tmp/images/
-
       - name: Setup git config
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Update staging images with ArgoCD Image Updater support
+      - name: Install yq
         run: |
-          FRONTEND_IMAGE=$(cat /tmp/images/image-refs-frontend/frontend-image.txt)
-          BACKEND_IMAGE=$(cat /tmp/images/image-refs-backend/backend-image.txt)
-          
-          # Update kustomization.yaml
-          sed -i "s|ghcr.io/.*/pern-frontend:.*|${FRONTEND_IMAGE}|g" apps/pern-app/overlays/staging/kustomization.yaml
-          sed -i "s|ghcr.io/.*/pern-backend:.*|${BACKEND_IMAGE}|g" apps/pern-app/overlays/staging/kustomization.yaml
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
 
-      - name: Commit and push staging changes
+      - name: Update staging images
         run: |
-          git add -A
+          SHORT_SHA="${{ needs.build-and-push.outputs.short-sha }}"
+          
+          # Update staging kustomization.yaml with new image tags
+          yq eval ".images[0].newTag = \"${SHORT_SHA}\"" -i apps/pern-app/overlays/staging/kustomization.yaml
+          yq eval ".images[1].newTag = \"${SHORT_SHA}\"" -i apps/pern-app/overlays/staging/kustomization.yaml
+          
+          # Also update base for ArgoCD Image Updater reference
+          yq eval ".images[0].newTag = \"${SHORT_SHA}\"" -i apps/pern-app/base/kustomization.yaml
+          yq eval ".images[1].newTag = \"${SHORT_SHA}\"" -i apps/pern-app/base/kustomization.yaml
+
+      - name: Commit and push changes
+        run: |
+          git add apps/pern-app/
+          
           if git diff --staged --quiet; then
             echo "No changes to commit"
             exit 0
           fi
 
-          cat > /tmp/commit-msg << 'EOF'
-          🚀 Deploy to staging: ${{ needs.build-and-push.outputs.image-tag }}
-
-          📊 Images:
-          - Frontend: ${{ env.REGISTRY }}/${{ github.repository_owner }}/pern-frontend:${{ needs.build-and-push.outputs.image-tag }}
-          - Backend: ${{ env.REGISTRY }}/${{ github.repository_owner }}/pern-backend:${{ needs.build-and-push.outputs.image-tag }}
-
+          cat > /tmp/commit-msg << EOF
+          🚀 Auto-update: Deploy ${{ needs.build-and-push.outputs.short-sha }} to staging
+          
+          📊 Images Updated:
+          - Backend: ghcr.io/${{ github.repository_owner }}/pern-backend:${{ needs.build-and-push.outputs.short-sha }}
+          - Frontend: ghcr.io/${{ github.repository_owner }}/pern-frontend:${{ needs.build-and-push.outputs.short-sha }}
+          
           🔍 Metadata:
           - Commit: ${{ github.sha }}
           - Branch: ${{ github.ref_name }}
           - Workflow: ${{ github.run_number }}
-          - Actor: ${{ github.actor }}
+          - Author: ${{ github.actor }}
+          - Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           EOF
 
           git commit -F /tmp/commit-msg
@@ -277,10 +257,10 @@ jobs:
       - name: Wait for ArgoCD auto-sync
         run: |
           echo "⏳ Waiting for ArgoCD to sync staging deployment..."
-          sleep 60  # Give ArgoCD time to pick up changes
+          sleep 30
 
   deploy-production:
-    needs: [deploy-staging, detect-changes]
+    needs: [update-gitops, detect-changes]
     if: needs.detect-changes.outputs.any == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: 
@@ -293,39 +273,39 @@ jobs:
           token: ${{ secrets.GITOPS_TOKEN }}
           fetch-depth: 0
 
-      - name: Download image references
-        uses: actions/download-artifact@v4
-        with:
-          path: /tmp/images/
-
       - name: Setup git config
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
       - name: Update production images
         run: |
-          FRONTEND_IMAGE=$(cat /tmp/images/image-refs-frontend/frontend-image.txt)
-          BACKEND_IMAGE=$(cat /tmp/images/image-refs-backend/backend-image.txt)
+          SHORT_SHA="${{ needs.build-and-push.outputs.short-sha }}"
           
-          # Update kustomization.yaml
-          sed -i "s|ghcr.io/.*/pern-frontend:.*|${FRONTEND_IMAGE}|g" apps/pern-app/overlays/production/kustomization.yaml
-          sed -i "s|ghcr.io/.*/pern-backend:.*|${BACKEND_IMAGE}|g" apps/pern-app/overlays/production/kustomization.yaml
+          # Update production kustomization.yaml with new image tags
+          yq eval ".images[0].newTag = \"${SHORT_SHA}\"" -i apps/pern-app/overlays/production/kustomization.yaml
+          yq eval ".images[1].newTag = \"${SHORT_SHA}\"" -i apps/pern-app/overlays/production/kustomization.yaml
 
       - name: Commit and push production changes
         run: |
-          git add -A
+          git add apps/pern-app/overlays/production/
+          
           if git diff --staged --quiet; then
             echo "No changes to commit"
             exit 0
           fi
 
-          cat > /tmp/commit-msg << 'EOF'
-          🚀 Deploy to production: ${{ needs.build-and-push.outputs.image-tag }}
+          cat > /tmp/commit-msg << EOF
+          🚀 Deploy to production: ${{ needs.build-and-push.outputs.short-sha }}
 
           📊 Images:
-          - Frontend: ${{ env.REGISTRY }}/${{ github.repository_owner }}/pern-frontend:${{ needs.build-and-push.outputs.image-tag }}
-          - Backend: ${{ env.REGISTRY }}/${{ github.repository_owner }}/pern-backend:${{ needs.build-and-push.outputs.image-tag }}
+          - Frontend: ghcr.io/${{ github.repository_owner }}/pern-frontend:${{ needs.build-and-push.outputs.short-sha }}
+          - Backend: ghcr.io/${{ github.repository_owner }}/pern-backend:${{ needs.build-and-push.outputs.short-sha }}
 
           🔍 Metadata:
           - Commit: ${{ github.sha }}
@@ -336,76 +316,10 @@ jobs:
           EOF
 
           git commit -F /tmp/commit-msg
-            # ...existing code...
-          
-            update-gitops:
-              name: Update GitOps Repository
-              needs: [build-backend, build-frontend]
-              runs-on: ubuntu-latest
-              if: github.ref == 'refs/heads/main'
-              
-              steps:
-                - name: Checkout GitOps Repository
-                  uses: actions/checkout@v4
-                  with:
-                    repository: mankinimbom/pern-gitops
-                    token: ${{ secrets.GITOPS_TOKEN }}
-                    path: gitops
-          
-                - name: Update Image Tags in Staging
-                  run: |
-                    cd gitops
-                    
-                    # Update backend image tag in staging kustomization
-                    sed -i "s|newTag: .*|newTag: ${{ github.sha }}|g" \
-                      apps/pern-app/overlays/staging/kustomization.yaml
-                    
-                    # Update frontend image tag in staging kustomization  
-                    sed -i "s|ghcr.io/mankinimbom/pern-frontend.*|ghcr.io/mankinimbom/pern-frontend:${{ github.sha }}|g" \
-                      apps/pern-app/overlays/staging/kustomization.yaml
-                    
-                    # Update backend image tag in staging kustomization
-                    sed -i "s|ghcr.io/mankinimbom/pern-backend.*|ghcr.io/mankinimbom/pern-backend:${{ github.sha }}|g" \
-                      apps/pern-app/overlays/staging/kustomization.yaml
-          
-                - name: Install yq
-                  run: |
-                    sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-                    sudo chmod +x /usr/local/bin/yq
-          
-                - name: Update Base Kustomization
-                  run: |
-                    cd gitops
-                    # Update image tags in base kustomization for ArgoCD Image Updater
-                    yq eval ".images[0].newTag = \"${{ github.sha }}\"" -i apps/pern-app/base/kustomization.yaml
-                    yq eval ".images[1].newTag = \"${{ github.sha }}\"" -i apps/pern-app/base/kustomization.yaml
-          
-                - name: Commit and Push Changes
-                  run: |
-                    cd gitops
-                    git config --local user.email "github-actions[bot]@users.noreply.github.com"
-                    git config --local user.name "github-actions[bot]"
-                    
-                    git add apps/pern-app/
-                    
-                    if git diff --staged --quiet; then
-                      echo "No changes to commit"
-                    else
-                      git commit -m "🚀 Auto-update: Deploy ${{ github.sha }} to staging
-                      
-                      - Backend: ghcr.io/mankinimbom/pern-backend:${{ github.sha }}
-                      - Frontend: ghcr.io/mankinimbom/pern-frontend:${{ github.sha }}
-                      
-                      Triggered by: ${{ github.event.head_commit.message }}
-                      Author: ${{ github.actor }}
-                      Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                      
-                      git push origin main
-          
-          # ...existing code...        git push origin main
+          git push origin main
 
   rollback-on-failure:
-    needs: [deploy-staging, deploy-production]
+    needs: [update-gitops, deploy-production]
     if: failure()
     runs-on: ubuntu-latest
     steps:
@@ -434,7 +348,7 @@ jobs:
           fi
 
   notify:
-    needs: [deploy-staging, deploy-production]
+    needs: [update-gitops, deploy-production]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -442,7 +356,7 @@ jobs:
         run: |
           if [ "${{ needs.deploy-production.result }}" == "success" ]; then
             echo "✅ Production deployment successful!"
-          elif [ "${{ needs.deploy-staging.result }}" == "success" ]; then
+          elif [ "${{ needs.update-gitops.result }}" == "success" ]; then
             echo "✅ Staging deployment successful!"
           else
             echo "❌ Deployment failed"

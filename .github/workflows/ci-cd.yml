@@ -198,7 +198,7 @@ jobs:
           echo "${{ env.REGISTRY }}/${{ github.repository_owner }}/pern-${{ matrix.component }}:${{ steps.version.outputs.image-tag }}" > /tmp/images/${{ matrix.component }}-image.txt
 
       - name: Upload image references
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: image-refs-${{ matrix.component }}
           path: /tmp/images/${{ matrix.component }}-image.txt
@@ -218,7 +218,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download image references
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: /tmp/images/
 
@@ -281,7 +281,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download image references
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: /tmp/images/
 

@@ -1,5 +1,6 @@
 name: Enhanced CI/CD Pipeline with ArgoCD Integration
 
+# CI/CD pipeline for PERN stack with GitOps integration
 on:
   push:
     branches: [ main, develop ]

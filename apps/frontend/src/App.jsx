@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from 'reac
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
+// Test CI/CD pipeline - image tag update verification
+
 import './App.css'
 import ErrorBoundary from './components/ErrorBoundary'
 import LoadingSpinner from './components/LoadingSpinner'

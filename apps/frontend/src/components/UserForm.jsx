@@ -3,6 +3,8 @@ import { useForm } from 'react-hook-form'
 import { toast } from 'react-toastify'
 import { usersAPI } from '../services/api'
 
+// CI/CD Test 2: Confirming image tag auto-update mechanism
+
 const UserForm = ({ user, onSuccess, onCancel }) => {
   const {
     register,

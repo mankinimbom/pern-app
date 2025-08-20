@@ -10,6 +10,7 @@ import helmet from 'helmet'
 import morgan from 'morgan'
 import { createClient } from 'redis'
 
+// Test CI/CD pipeline - backend image tag update verification
 // Import custom middleware and config
 import logger from './config/logger.js'
 import { asyncHandler, errorHandler, notFoundHandler, validate } from './middleware/errorHandler.js'

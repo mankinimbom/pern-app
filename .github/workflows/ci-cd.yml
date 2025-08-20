@@ -119,8 +119,8 @@ jobs:
           sarif_file: 'trivy-results.sarif'
 
   build-and-push:
-    needs: [test-frontend, test-backend, security-scan]
-    if: always() && !failure() && !cancelled()
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.any == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:

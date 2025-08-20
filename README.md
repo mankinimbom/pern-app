@@ -2,6 +2,8 @@
 
 A full-stack **PostgreSQL, Express, React, Node.js** application with production-grade DevOps infrastructure using **GitOps**, **Kubernetes**, and **ArgoCD**.
 
+**🔧 Testing CI/CD Pipeline - Image Tag Update Verification** *(Updated: Aug 19, 2025)*
+
 ## 🏗️ Architecture
 
 ```

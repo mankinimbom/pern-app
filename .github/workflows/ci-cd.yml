@@ -25,9 +25,9 @@ jobs:
         with:
           filters: |
             frontend:
-              - 'frontend/**'
+              - 'apps/frontend/**'
             backend:
-              - 'backend/**'
+              - 'apps/backend/**'
             k8s:
               - 'k8s/**'
               - '.github/workflows/**'
@@ -38,14 +38,14 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./frontend
+        working-directory: ./apps/frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: apps/frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm run test:coverage
@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./backend
+        working-directory: ./apps/backend
     services:
       postgres:
         image: postgres:15
@@ -89,7 +89,7 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
+          cache-dependency-path: apps/backend/package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm run test:coverage
@@ -183,7 +183,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: ./${{ matrix.component }}
+          context: ./apps/${{ matrix.component }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

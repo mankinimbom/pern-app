@@ -23,24 +23,14 @@ RUN apk update && apk upgrade && \
     apk add --no-cache curl && \
     rm -rf /var/cache/apk/*
 
-# Create nginx user
-RUN addgroup -g 1001 -S nginx-user && \
-    adduser -S nginx-user -u 1001
-
 # Copy built assets
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy custom nginx config
 COPY nginx.conf /etc/nginx/nginx.conf
 
-# Set proper permissions
-RUN chown -R nginx-user:nginx-user /usr/share/nginx/html && \
-    chown -R nginx-user:nginx-user /var/cache/nginx && \
-    chown -R nginx-user:nginx-user /var/log/nginx && \
-    chown -R nginx-user:nginx-user /etc/nginx/conf.d
-
-# Switch to non-root user
-USER nginx-user
+# Ensure runtime directories exist (master runs as root)
+RUN mkdir -p /var/cache/nginx /var/log/nginx /var/run/nginx
 
 # Expose port
 EXPOSE 80

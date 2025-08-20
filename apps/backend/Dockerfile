@@ -1,15 +1,16 @@
 ########################################
-# Builder stage: install all deps + prisma generate
+# Builder stage: install all deps + prisma generate (Debian/glibc)
 ########################################
-FROM node:18-alpine AS builder
+FROM node:18-bookworm-slim AS builder
 
 ENV NODE_ENV=development
 WORKDIR /app
 
 # Install minimal tools for build steps
-RUN apk update && apk upgrade && \
-    apk add --no-cache curl git python3 make g++ && \
-    rm -rf /var/cache/apk/*
+RUN apt-get update && \
+        apt-get install -y --no-install-recommends \
+            ca-certificates curl git python3 make g++ openssl && \
+        rm -rf /var/lib/apt/lists/*
 
 # Copy manifests early to leverage Docker layer caching
 COPY package*.json ./
@@ -28,16 +29,18 @@ RUN npm prune --omit=dev && \
     npm cache clean --force
 
 ########################################
-# Runtime stage: small, production-only
+# Runtime stage: small, production-only (Debian/glibc)
 ########################################
-FROM node:18-alpine AS runner
+FROM node:18-bookworm-slim AS runner
 
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Install runtime packages only (no openssl1.1-compat on Alpine 3.21)
-RUN apk add --no-cache dumb-init libc6-compat && \
-    rm -rf /var/cache/apk/*
+# Install runtime packages (openssl for Prisma, dumb-init)
+RUN apt-get update && \
+        apt-get install -y --no-install-recommends \
+            ca-certificates dumb-init openssl && \
+        rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \

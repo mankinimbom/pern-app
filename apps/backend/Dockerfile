@@ -2,7 +2,7 @@ FROM node:18-alpine AS base
 
 # Install security updates and required tools
 RUN apk update && apk upgrade && \
-    apk add --no-cache dumb-init curl && \
+    apk add --no-cache dumb-init curl openssl1.1-compat libc6-compat && \
     rm -rf /var/cache/apk/*
 
 # Create app directory and user

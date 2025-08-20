@@ -1,5 +1,8 @@
 # Multi-stage build for production
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
+
+# Ensure build tools are present for any native dependencies
+RUN apk add --no-cache python3 make g++ git libc6-compat
 
 WORKDIR /app
 

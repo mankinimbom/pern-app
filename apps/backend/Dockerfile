@@ -1,7 +1,7 @@
 ########################################
 # Builder stage: install all deps + prisma generate (Debian/glibc)
 ########################################
-FROM node:18-bookworm-slim AS builder
+FROM node:20-bookworm-slim AS builder
 
 ENV NODE_ENV=development
 WORKDIR /app
@@ -9,7 +9,9 @@ WORKDIR /app
 # Install minimal tools for build steps
 RUN apt-get update && \
         apt-get install -y --no-install-recommends \
-            ca-certificates curl git python3 make g++ openssl && \
+            ca-certificates curl git python3 make g++ build-essential openssl pkg-config \
+            libc6 libssl3 wget \
+        && \
         rm -rf /var/lib/apt/lists/*
 
 # Copy manifests early to leverage Docker layer caching
@@ -31,7 +33,7 @@ RUN npm prune --omit=dev && \
 ########################################
 # Runtime stage: small, production-only (Debian/glibc)
 ########################################
-FROM node:18-bookworm-slim AS runner
+FROM node:20-bookworm-slim AS runner
 
 ENV NODE_ENV=production
 WORKDIR /app
@@ -39,7 +41,8 @@ WORKDIR /app
 # Install runtime packages (openssl for Prisma, dumb-init)
 RUN apt-get update && \
         apt-get install -y --no-install-recommends \
-            ca-certificates dumb-init openssl && \
+            ca-certificates dumb-init openssl libssl3 \
+        && \
         rm -rf /var/lib/apt/lists/*
 
 # Create non-root user

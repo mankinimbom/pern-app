@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Backend API for PERN stack application",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",

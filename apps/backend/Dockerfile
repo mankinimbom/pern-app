@@ -43,16 +43,15 @@ RUN apt-get update && \
         rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodeuser -u 1001
+## Debian-based Node images provide a 'node' user already; reuse it
 
 # Copy built app with production node_modules from builder
-COPY --from=builder --chown=nodeuser:nodejs /app /app
+COPY --from=builder --chown=node:node /app /app
 
 # Ensure logs dir exists
-RUN mkdir -p logs && chown nodeuser:nodejs logs
+RUN mkdir -p logs && chown node:node logs
 
-USER nodeuser
+USER node
 
 EXPOSE 3001
 

@@ -336,7 +336,73 @@ jobs:
           EOF
 
           git commit -F /tmp/commit-msg
-          git push origin main
+            # ...existing code...
+          
+            update-gitops:
+              name: Update GitOps Repository
+              needs: [build-backend, build-frontend]
+              runs-on: ubuntu-latest
+              if: github.ref == 'refs/heads/main'
+              
+              steps:
+                - name: Checkout GitOps Repository
+                  uses: actions/checkout@v4
+                  with:
+                    repository: mankinimbom/pern-gitops
+                    token: ${{ secrets.GITOPS_TOKEN }}
+                    path: gitops
+          
+                - name: Update Image Tags in Staging
+                  run: |
+                    cd gitops
+                    
+                    # Update backend image tag in staging kustomization
+                    sed -i "s|newTag: .*|newTag: ${{ github.sha }}|g" \
+                      apps/pern-app/overlays/staging/kustomization.yaml
+                    
+                    # Update frontend image tag in staging kustomization  
+                    sed -i "s|ghcr.io/mankinimbom/pern-frontend.*|ghcr.io/mankinimbom/pern-frontend:${{ github.sha }}|g" \
+                      apps/pern-app/overlays/staging/kustomization.yaml
+                    
+                    # Update backend image tag in staging kustomization
+                    sed -i "s|ghcr.io/mankinimbom/pern-backend.*|ghcr.io/mankinimbom/pern-backend:${{ github.sha }}|g" \
+                      apps/pern-app/overlays/staging/kustomization.yaml
+          
+                - name: Install yq
+                  run: |
+                    sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+                    sudo chmod +x /usr/local/bin/yq
+          
+                - name: Update Base Kustomization
+                  run: |
+                    cd gitops
+                    # Update image tags in base kustomization for ArgoCD Image Updater
+                    yq eval ".images[0].newTag = \"${{ github.sha }}\"" -i apps/pern-app/base/kustomization.yaml
+                    yq eval ".images[1].newTag = \"${{ github.sha }}\"" -i apps/pern-app/base/kustomization.yaml
+          
+                - name: Commit and Push Changes
+                  run: |
+                    cd gitops
+                    git config --local user.email "github-actions[bot]@users.noreply.github.com"
+                    git config --local user.name "github-actions[bot]"
+                    
+                    git add apps/pern-app/
+                    
+                    if git diff --staged --quiet; then
+                      echo "No changes to commit"
+                    else
+                      git commit -m "🚀 Auto-update: Deploy ${{ github.sha }} to staging
+                      
+                      - Backend: ghcr.io/mankinimbom/pern-backend:${{ github.sha }}
+                      - Frontend: ghcr.io/mankinimbom/pern-frontend:${{ github.sha }}
+                      
+                      Triggered by: ${{ github.event.head_commit.message }}
+                      Author: ${{ github.actor }}
+                      Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                      
+                      git push origin main
+          
+          # ...existing code...        git push origin main
 
   rollback-on-failure:
     needs: [deploy-staging, deploy-production]

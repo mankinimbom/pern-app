@@ -144,17 +144,17 @@ jobs:
             VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "v0.1.0")
             VERSION=${VERSION#v}
             CLEAN_VERSION=$(echo $VERSION | sed 's/-.*$//')
-            IMAGE_TAG="v${CLEAN_VERSION}-$(date +%Y%m%d-%H%M%S)-${{ github.sha:0:7 }}"
+            IMAGE_TAG="v${CLEAN_VERSION}-$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA:0:7}"
           else
             # Branch-based tags for non-main branches
             BRANCH_NAME="${{ github.ref_name }}"
-            IMAGE_TAG="${BRANCH_NAME}-${{ github.sha:0:7 }}"
-            VERSION="${BRANCH_NAME}-${{ github.sha:0:7 }}"
+            IMAGE_TAG="${BRANCH_NAME}-${GITHUB_SHA:0:7}"
+            VERSION="${BRANCH_NAME}-${GITHUB_SHA:0:7}"
           fi
           
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
-          echo "short-sha=${{ github.sha:0:7 }}" >> $GITHUB_OUTPUT
+          echo "short-sha=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

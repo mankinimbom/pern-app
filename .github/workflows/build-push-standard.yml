@@ -59,7 +59,10 @@ jobs:
           type=ref,event=pr
           type=sha,prefix={{branch}}-
           type=raw,value=latest,enable={{is_default_branch}}
-          type=raw,value=${{ github.sha }},enable={{is_default_branch}}
+          type=raw,value={{branch}}-{{date 'YYYYMMDD-HHmmss'}},enable={{is_default_branch}}
+        labels: |
+          org.opencontainers.image.title=PERN Backend Standard
+          org.opencontainers.image.description=PERN Stack Backend (Standard K8s Deployment)
 
     - name: Build and push Backend
       id: build
@@ -75,7 +78,11 @@ jobs:
 
     - name: Output image
       id: image
-      run: echo "image=${{ env.IMAGE_PREFIX }}/pern-backend-standard:latest" >> $GITHUB_OUTPUT
+      run: |
+        # Extract the main tag (first tag from metadata)
+        MAIN_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+        echo "image=${MAIN_TAG}" >> $GITHUB_OUTPUT
+        echo "tag=$(echo ${MAIN_TAG} | cut -d: -f2)" >> $GITHUB_OUTPUT
 
   build-frontend:
     runs-on: ubuntu-latest
@@ -106,7 +113,10 @@ jobs:
           type=ref,event=pr
           type=sha,prefix={{branch}}-
           type=raw,value=latest,enable={{is_default_branch}}
-          type=raw,value=${{ github.sha }},enable={{is_default_branch}}
+          type=raw,value={{branch}}-{{date 'YYYYMMDD-HHmmss'}},enable={{is_default_branch}}
+        labels: |
+          org.opencontainers.image.title=PERN Frontend Standard
+          org.opencontainers.image.description=PERN Stack Frontend (Standard K8s Deployment)
 
     - name: Build and push Frontend
       id: build
@@ -122,7 +132,11 @@ jobs:
 
     - name: Output image
       id: image
-      run: echo "image=${{ env.IMAGE_PREFIX }}/pern-frontend-standard:latest" >> $GITHUB_OUTPUT
+      run: |
+        # Extract the main tag (first tag from metadata)
+        MAIN_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+        echo "image=${MAIN_TAG}" >> $GITHUB_OUTPUT
+        echo "tag=$(echo ${MAIN_TAG} | cut -d: -f2)" >> $GITHUB_OUTPUT
 
   validate-manifests:
     runs-on: ubuntu-latest

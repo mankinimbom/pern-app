@@ -1,3 +1,5 @@
+// PERN Backend - Standard K8s Deployment Test
+// This change triggers the dynamic tagging workflow
 import { PrismaClient } from '@prisma/client'
 import compression from 'compression'
 import RedisStore from 'connect-redis'

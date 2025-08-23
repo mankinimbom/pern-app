@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: ghcr.io/mankinimbom/pern-backend:standard-latest
+        image: ghcr.io/mankinimbom/pern-backend-standard:latest
         ports:
         - containerPort: 3001
         env:

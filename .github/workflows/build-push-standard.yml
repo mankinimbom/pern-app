@@ -53,13 +53,13 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.IMAGE_PREFIX }}/pern-backend
+        images: ${{ env.IMAGE_PREFIX }}/pern-backend-standard
         tags: |
           type=ref,event=branch
           type=ref,event=pr
           type=sha,prefix={{branch}}-
-          type=raw,value=standard-latest,enable={{is_default_branch}}
-          type=raw,value=standard-${{ github.sha }},enable={{is_default_branch}}
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=${{ github.sha }},enable={{is_default_branch}}
 
     - name: Build and push Backend
       id: build
@@ -75,7 +75,7 @@ jobs:
 
     - name: Output image
       id: image
-      run: echo "image=${{ env.IMAGE_PREFIX }}/pern-backend:standard-latest" >> $GITHUB_OUTPUT
+      run: echo "image=${{ env.IMAGE_PREFIX }}/pern-backend-standard:latest" >> $GITHUB_OUTPUT
 
   build-frontend:
     runs-on: ubuntu-latest
@@ -100,13 +100,13 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.IMAGE_PREFIX }}/pern-frontend
+        images: ${{ env.IMAGE_PREFIX }}/pern-frontend-standard
         tags: |
           type=ref,event=branch
           type=ref,event=pr
           type=sha,prefix={{branch}}-
-          type=raw,value=standard-latest,enable={{is_default_branch}}
-          type=raw,value=standard-${{ github.sha }},enable={{is_default_branch}}
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=${{ github.sha }},enable={{is_default_branch}}
 
     - name: Build and push Frontend
       id: build
@@ -122,7 +122,7 @@ jobs:
 
     - name: Output image
       id: image
-      run: echo "image=${{ env.IMAGE_PREFIX }}/pern-frontend:standard-latest" >> $GITHUB_OUTPUT
+      run: echo "image=${{ env.IMAGE_PREFIX }}/pern-frontend-standard:latest" >> $GITHUB_OUTPUT
 
   validate-manifests:
     runs-on: ubuntu-latest
@@ -231,12 +231,12 @@ jobs:
             - https://github.com/mankinimbom/pern-app//k8s-standard/overlays/staging
           
           images:
-            - name: ghcr.io/mankinimbom/pern-backend
-              newName: ghcr.io/mankinimbom/pern-backend
-              newTag: "standard-latest"
-            - name: ghcr.io/mankinimbom/pern-frontend  
-              newName: ghcr.io/mankinimbom/pern-frontend
-              newTag: "standard-latest"
+            - name: ghcr.io/mankinimbom/pern-backend-standard
+              newName: ghcr.io/mankinimbom/pern-backend-standard
+              newTag: "latest"
+            - name: ghcr.io/mankinimbom/pern-frontend-standard  
+              newName: ghcr.io/mankinimbom/pern-frontend-standard
+              newTag: "latest"
           
           commonLabels:
             deployment-type: standard-k8s

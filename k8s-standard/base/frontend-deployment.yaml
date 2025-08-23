@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: ghcr.io/mankinimbom/pern-frontend:standard-latest
+        image: ghcr.io/mankinimbom/pern-frontend-standard:latest
         ports:
         - containerPort: 80
         env:

@@ -6,74 +6,53 @@ The GitHub Actions workflow failed with:
 ERROR: failed to push ghcr.io/mankinimbom/pern-frontend:main: denied: installation not allowed to Write organization package
 ```
 
-## Solution
-You need to create a Personal Access Token (PAT) with package write permissions.
+## Solution ✅ RESOLVED
+Using existing `GITOPS_TOKEN` secret from repository.
 
-## Steps to Fix
+## What Was Fixed
 
-### 1. Create Personal Access Token
-
-1. Go to GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
-2. Click "Generate new token (classic)"
-3. Set expiration (recommended: 90 days or custom)
-4. Select these scopes:
-   - ✅ `write:packages` - Upload packages to GitHub Package Registry
-   - ✅ `read:packages` - Download packages from GitHub Package Registry
-   - ✅ `repo` - Full control of private repositories (if needed)
-
-5. Click "Generate token"
-6. **Copy the token immediately** (you won't see it again)
-
-### 2. Add Token to Repository Secrets
-
-1. Go to your repository: https://github.com/mankinimbom/pern-app
-2. Settings → Secrets and variables → Actions
-3. Click "New repository secret"
-4. Name: `CR_PAT`
-5. Value: Paste your token
-6. Click "Add secret"
-
-### 3. Alternative: Use GITHUB_TOKEN (if preferred)
-
-If you prefer to use GITHUB_TOKEN instead of PAT, update the workflow:
-
-```yaml
-- name: Log in to Container Registry
-  uses: docker/login-action@v3
-  with:
-    registry: ${{ env.REGISTRY }}
-    username: ${{ github.actor }}
-    password: ${{ secrets.GITHUB_TOKEN }}
-```
-
-But you'll need to ensure your repository has package write permissions.
+The workflow now uses your existing `GITOPS_TOKEN` secret which already has the required permissions:
+- ✅ `write:packages` - Upload packages to GitHub Package Registry  
+- ✅ `read:packages` - Download packages from GitHub Package Registry
 
 ## Current Status
 
-- ✅ Updated workflow created: `.github/workflows/build-push-standard.yml`
-- ❌ Missing `CR_PAT` secret in repository
-- ⏳ Waiting for PAT setup to retry workflow
+- ✅ Updated workflow to use: `${{ secrets.GITOPS_TOKEN }}`
+- ✅ Existing token has required permissions
+- ✅ Ready to test image builds
 
-## Test After Setup
+## Test the Fix
 
-Once you add the `CR_PAT` secret:
+Push this change to trigger the workflow:
 
-1. Push a small change to trigger the workflow:
-   ```bash
-   git commit --allow-empty -m "Test image build with PAT"
-   git push origin main
-   ```
+```bash
+git add .
+git commit -m "Use existing GITOPS_TOKEN for container registry auth"
+git push origin main
+```
 
-2. Monitor the workflow in GitHub Actions tab
+## Alternative: Manual Local Build
 
-3. Verify images are pushed to GHCR:
-   - https://github.com/mankinimbom/pern-backend/pkgs/container/pern-backend
-   - https://github.com/mankinimbom/pern-frontend/pkgs/container/pern-frontend
+If you want to test locally first:
+
+```bash
+# Use your existing token
+echo $GITOPS_TOKEN | docker login ghcr.io -u mankinimbom --password-stdin
+
+# Build and push manually
+./build-images.sh
+```
+
+## Expected Results
+
+After successful push, images will be available at:
+- https://github.com/mankinimbom/pern-backend/pkgs/container/pern-backend
+- https://github.com/mankinimbom/pern-frontend/pkgs/container/pern-frontend
 
 ## Package Visibility
 
 After successful push, you may need to make packages public:
 
 1. Go to package page on GitHub
-2. Settings → Change visibility → Public
+2. Settings → Change visibility → Public  
 3. This allows Kubernetes to pull without authentication

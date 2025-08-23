@@ -1,4 +1,4 @@
-name: Build and Push Standard PERN Images
+name: Standard K8s CI/CD Pipeline
 
 on:
   push:
@@ -14,6 +14,15 @@ on:
       - 'k8s-standard/**'
   workflow_dispatch:
     inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+        - development
+        - staging
+        - both
       force_rebuild:
         description: 'Force rebuild images'
         required: false
@@ -179,3 +188,171 @@ jobs:
       uses: github/codeql-action/upload-sarif@v2
       with:
         sarif_file: '.'
+
+  deploy-development:
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend, validate-manifests]
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'development' || github.event.inputs.environment == 'both'))
+    environment: 
+      name: pern-standard-dev
+      url: http://pern-standard-dev.local
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Kustomize
+      uses: imranismail/setup-kustomize@v2
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        mkdir -p $HOME/.kube
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+        chmod 600 $HOME/.kube/config
+
+    - name: Update image tags in manifests
+      run: |
+        # Update backend image in development manifests
+        sed -i 's|image: ghcr.io/mankinimbom/pern-backend:.*|image: ${{ needs.build-backend.outputs.backend-image }}|g' k8s-standard/base/backend-deployment.yaml
+        
+        # Update frontend image in development manifests
+        sed -i 's|image: ghcr.io/mankinimbom/pern-frontend:.*|image: ${{ needs.build-frontend.outputs.frontend-image }}|g' k8s-standard/base/frontend-deployment.yaml
+
+    - name: Deploy to Development
+      run: |
+        echo "🚀 Deploying standard PERN stack to development..."
+        cd k8s-standard/overlays/development
+        kustomize build . | kubectl apply -f -
+
+    - name: Wait for rollout
+      run: |
+        echo "⏳ Waiting for deployments to be ready..."
+        kubectl wait --for=condition=available --timeout=300s deployment/dev-backend -n pern-standard
+        kubectl wait --for=condition=available --timeout=300s deployment/dev-frontend -n pern-standard
+        kubectl wait --for=condition=available --timeout=300s deployment/dev-postgresql -n pern-standard
+        kubectl wait --for=condition=available --timeout=300s deployment/dev-redis -n pern-standard
+
+    - name: Verify deployment
+      run: |
+        echo "📊 Development Deployment Status:"
+        kubectl get pods -n pern-standard -l environment=development
+        kubectl get svc -n pern-standard -l environment=development
+        kubectl get ingress -n pern-standard
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend, deploy-development]
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'staging' || github.event.inputs.environment == 'both'))
+    environment: 
+      name: pern-standard-staging
+      url: http://pern-standard-staging.local
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Kustomize
+      uses: imranismail/setup-kustomize@v2
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        mkdir -p $HOME/.kube
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+        chmod 600 $HOME/.kube/config
+
+    - name: Update image tags in manifests
+      run: |
+        # Update backend image in staging manifests
+        sed -i 's|image: ghcr.io/mankinimbom/pern-backend:.*|image: ${{ needs.build-backend.outputs.backend-image }}|g' k8s-standard/base/backend-deployment.yaml
+        
+        # Update frontend image in staging manifests
+        sed -i 's|image: ghcr.io/mankinimbom/pern-frontend:.*|image: ${{ needs.build-frontend.outputs.frontend-image }}|g' k8s-standard/base/frontend-deployment.yaml
+
+    - name: Deploy to Staging
+      run: |
+        echo "🚀 Deploying standard PERN stack to staging..."
+        cd k8s-standard/overlays/staging
+        kustomize build . | kubectl apply -f -
+
+    - name: Wait for rollout
+      run: |
+        echo "⏳ Waiting for deployments to be ready..."
+        kubectl wait --for=condition=available --timeout=300s deployment/staging-backend -n pern-standard
+        kubectl wait --for=condition=available --timeout=300s deployment/staging-frontend -n pern-standard
+        kubectl wait --for=condition=available --timeout=300s deployment/staging-postgresql -n pern-standard
+        kubectl wait --for=condition=available --timeout=300s deployment/staging-redis -n pern-standard
+
+    - name: Verify deployment
+      run: |
+        echo "📊 Staging Deployment Status:"
+        kubectl get pods -n pern-standard -l environment=staging
+        kubectl get svc -n pern-standard -l environment=staging
+        kubectl get ingress -n pern-standard
+
+  rollback-on-failure:
+    runs-on: ubuntu-latest
+    needs: [deploy-development, deploy-staging]
+    if: failure()
+    steps:
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        mkdir -p $HOME/.kube
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+        chmod 600 $HOME/.kube/config
+
+    - name: Rollback failed deployments
+      run: |
+        echo "🔄 Rolling back failed deployments..."
+        
+        # Rollback development deployments
+        kubectl get deployments -n pern-standard -l environment=development --no-headers | while read line; do
+          deployment=$(echo $line | awk '{print $1}')
+          kubectl rollout undo deployment/$deployment -n pern-standard || true
+        done
+        
+        # Rollback staging deployments
+        kubectl get deployments -n pern-standard -l environment=staging --no-headers | while read line; do
+          deployment=$(echo $line | awk '{print $1}')
+          kubectl rollout undo deployment/$deployment -n pern-standard || true
+        done
+        
+        echo "✅ Rollback completed"
+
+  notify:
+    runs-on: ubuntu-latest
+    needs: [deploy-development, deploy-staging]
+    if: always()
+    steps:
+    - name: Deployment notification
+      run: |
+        if [ "${{ needs.deploy-staging.result }}" == "success" ]; then
+          echo "✅ Standard deployment successful to both development and staging!"
+          echo "🌐 Access URLs:"
+          echo "  - Development: http://pern-standard-dev.local"
+          echo "  - Staging: http://pern-standard-staging.local"
+        elif [ "${{ needs.deploy-development.result }}" == "success" ]; then
+          echo "✅ Development deployment successful!"
+          echo "❌ Staging deployment failed"
+        else
+          echo "❌ Standard deployment failed"
+        fi
+        
+        echo "📊 Deployment Summary:"
+        echo "- Backend Image: ${{ needs.build-backend.outputs.backend-image }}"
+        echo "- Frontend Image: ${{ needs.build-frontend.outputs.frontend-image }}"
+        echo "- Commit: ${{ github.sha }}"
+        echo "- Actor: ${{ github.actor }}"
+        echo "- Workflow: ${{ github.run_number }}"

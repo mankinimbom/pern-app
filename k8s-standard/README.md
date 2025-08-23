@@ -148,17 +148,50 @@ All components include:
 - **Liveness Probes**: Restart containers if unhealthy
 - **Readiness Probes**: Remove from service if not ready
 
-## 🔄 CI/CD Integration
+## 🔄 CI/CD Pipeline
 
-### GitHub Actions
+The GitHub Actions workflow (`build-push-standard.yml`) provides a complete CI/CD pipeline:
 
-The deployment includes a GitHub Actions workflow (`.github/workflows/deploy-standard.yml`) that:
+### **Automatic Triggers**
+- **Push to main**: Builds, validates, and deploys to development → staging
+- **Pull request**: Builds, validates, and runs security scans (no deployment)
+- **Manual trigger**: Deploy to specific environment via GitHub Actions UI
 
-1. **Validates** manifests with kustomize
-2. **Deploys** to development automatically on main branch
-3. **Deploys** to staging after development success
-4. **Supports** manual deployment via workflow_dispatch
-5. **Includes** rollback on failure
+### **Pipeline Stages**
+
+1. **🏗️ Build Phase**
+   - Build backend and frontend Docker images
+   - Push to GitHub Container Registry with tags
+   - Run in parallel for faster execution
+
+2. **✅ Validation Phase**
+   - Validate Kubernetes manifests with Kustomize
+   - Security scan with Trivy (on PRs)
+   - Upload manifests as artifacts
+
+3. **🚀 Deployment Phase**
+   - **Development**: Deploy with lower resources, single replicas
+   - **Staging**: Deploy with higher resources, multiple replicas
+   - Automatic image tag updates in manifests
+   - Health checks and rollout verification
+
+4. **🔄 Recovery Phase**
+   - Automatic rollback on deployment failure
+   - Notification of deployment status
+
+### **Required Secrets**
+
+Add these to your GitHub repository secrets:
+
+| Secret | Description | Example |
+|--------|-------------|---------|
+| `GITOPS_TOKEN` | GitHub PAT with packages:write | `ghp_xxxx` |
+| `KUBECONFIG` | Base64 encoded kubeconfig | `apiVersion: v1...` |
+
+```bash
+# Generate KUBECONFIG secret
+cat ~/.kube/config | base64 -w 0
+```
 
 ### Required Secrets
 

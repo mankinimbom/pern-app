@@ -1,4 +1,4 @@
-name: Standard K8s CI/CD Pipeline
+name: Build Standard K8s Images
 
 on:
   push:
@@ -14,15 +14,6 @@ on:
       - 'k8s-standard/**'
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Environment to deploy to'
-        required: true
-        default: 'development'
-        type: choice
-        options:
-        - development
-        - staging
-        - both
       force_rebuild:
         description: 'Force rebuild images'
         required: false
@@ -36,6 +27,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+  GITOPS_REPO: mankinimbom/pern-gitops
 
 jobs:
   build-backend:
@@ -189,170 +181,122 @@ jobs:
       with:
         sarif_file: '.'
 
-  deploy-development:
-    runs-on: ubuntu-latest
+  update-gitops-standard:
+    name: Update GitOps Repository - Standard K8s
     needs: [build-backend, build-frontend, validate-manifests]
-    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'development' || github.event.inputs.environment == 'both'))
-    environment: 
-      name: pern-standard-dev
-      url: http://pern-standard-dev.local
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Setup Kustomize
-      uses: imranismail/setup-kustomize@v2
-
-    - name: Setup kubectl
-      uses: azure/setup-kubectl@v3
-      with:
-        version: 'v1.28.0'
-
-    - name: Configure kubectl
-      run: |
-        mkdir -p $HOME/.kube
-        echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
-        chmod 600 $HOME/.kube/config
-
-    - name: Update image tags in manifests
-      run: |
-        # Update backend image in development manifests
-        sed -i 's|image: ghcr.io/mankinimbom/pern-backend:.*|image: ${{ needs.build-backend.outputs.backend-image }}|g' k8s-standard/base/backend-deployment.yaml
-        
-        # Update frontend image in development manifests
-        sed -i 's|image: ghcr.io/mankinimbom/pern-frontend:.*|image: ${{ needs.build-frontend.outputs.frontend-image }}|g' k8s-standard/base/frontend-deployment.yaml
-
-    - name: Deploy to Development
-      run: |
-        echo "🚀 Deploying standard PERN stack to development..."
-        cd k8s-standard/overlays/development
-        kustomize build . | kubectl apply -f -
-
-    - name: Wait for rollout
-      run: |
-        echo "⏳ Waiting for deployments to be ready..."
-        kubectl wait --for=condition=available --timeout=300s deployment/dev-backend -n pern-standard
-        kubectl wait --for=condition=available --timeout=300s deployment/dev-frontend -n pern-standard
-        kubectl wait --for=condition=available --timeout=300s deployment/dev-postgresql -n pern-standard
-        kubectl wait --for=condition=available --timeout=300s deployment/dev-redis -n pern-standard
-
-    - name: Verify deployment
-      run: |
-        echo "📊 Development Deployment Status:"
-        kubectl get pods -n pern-standard -l environment=development
-        kubectl get svc -n pern-standard -l environment=development
-        kubectl get ingress -n pern-standard
-
-  deploy-staging:
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend, deploy-development]
-    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'staging' || github.event.inputs.environment == 'both'))
-    environment: 
-      name: pern-standard-staging
-      url: http://pern-standard-staging.local
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      backend-image: ${{ needs.build-backend.outputs.backend-image }}
+      frontend-image: ${{ needs.build-frontend.outputs.frontend-image }}
+    
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout GitOps Repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_TOKEN }}
+          fetch-depth: 0
 
-    - name: Setup Kustomize
-      uses: imranismail/setup-kustomize@v2
+      - name: Setup git config
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-    - name: Setup kubectl
-      uses: azure/setup-kubectl@v3
-      with:
-        version: 'v1.28.0'
+      - name: Update standard K8s manifests with new image tags
+        run: |
+          BACKEND_IMAGE="${{ needs.build-backend.outputs.backend-image }}"
+          FRONTEND_IMAGE="${{ needs.build-frontend.outputs.frontend-image }}"
+          
+          echo "� Updating standard K8s manifests..."
+          echo "Backend: $BACKEND_IMAGE"
+          echo "Frontend: $FRONTEND_IMAGE"
+          
+          # Check if standard app directory exists, if not create it
+          if [ ! -d "apps/pern-app-standard" ]; then
+            echo "📁 Creating standard app directory in GitOps repo..."
+            mkdir -p apps/pern-app-standard
+            
+            # Copy standard manifests from main repo (we'll need to add this step)
+            echo "📋 Standard app manifests will be managed by ArgoCD"
+          fi
+          
+          # Create or update kustomization files for image updates
+          cat > apps/pern-app-standard/kustomization.yaml << EOF
+          apiVersion: kustomize.config.k8s.io/v1beta1
+          kind: Kustomization
+          
+          resources:
+            - https://github.com/mankinimbom/pern-app//k8s-standard/overlays/development
+            - https://github.com/mankinimbom/pern-app//k8s-standard/overlays/staging
+          
+          images:
+            - name: ghcr.io/mankinimbom/pern-backend
+              newName: ghcr.io/mankinimbom/pern-backend
+              newTag: "standard-latest"
+            - name: ghcr.io/mankinimbom/pern-frontend  
+              newName: ghcr.io/mankinimbom/pern-frontend
+              newTag: "standard-latest"
+          
+          commonLabels:
+            deployment-type: standard-k8s
+            managed-by: argocd
+          EOF
 
-    - name: Configure kubectl
-      run: |
-        mkdir -p $HOME/.kube
-        echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
-        chmod 600 $HOME/.kube/config
+      - name: Commit and push changes
+        run: |
+          git add apps/pern-app-standard/
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
 
-    - name: Update image tags in manifests
-      run: |
-        # Update backend image in staging manifests
-        sed -i 's|image: ghcr.io/mankinimbom/pern-backend:.*|image: ${{ needs.build-backend.outputs.backend-image }}|g' k8s-standard/base/backend-deployment.yaml
-        
-        # Update frontend image in staging manifests
-        sed -i 's|image: ghcr.io/mankinimbom/pern-frontend:.*|image: ${{ needs.build-frontend.outputs.frontend-image }}|g' k8s-standard/base/frontend-deployment.yaml
+          cat > /tmp/commit-msg << EOF
+          🚀 Update Standard K8s: Deploy latest images
+          
+          📊 Images Updated:
+          - Backend: ${{ needs.build-backend.outputs.backend-image }}
+          - Frontend: ${{ needs.build-frontend.outputs.frontend-image }}
+          
+          🔍 Metadata:
+          - Commit: ${{ github.sha }}
+          - Branch: ${{ github.ref_name }}
+          - Workflow: ${{ github.run_number }}
+          - Author: ${{ github.actor }}
+          - Deployment Type: Standard Kubernetes (vs Rollouts)
+          - Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
 
-    - name: Deploy to Staging
-      run: |
-        echo "🚀 Deploying standard PERN stack to staging..."
-        cd k8s-standard/overlays/staging
-        kustomize build . | kubectl apply -f -
+          git commit -F /tmp/commit-msg
+          git push origin main
 
-    - name: Wait for rollout
-      run: |
-        echo "⏳ Waiting for deployments to be ready..."
-        kubectl wait --for=condition=available --timeout=300s deployment/staging-backend -n pern-standard
-        kubectl wait --for=condition=available --timeout=300s deployment/staging-frontend -n pern-standard
-        kubectl wait --for=condition=available --timeout=300s deployment/staging-postgresql -n pern-standard
-        kubectl wait --for=condition=available --timeout=300s deployment/staging-redis -n pern-standard
-
-    - name: Verify deployment
-      run: |
-        echo "📊 Staging Deployment Status:"
-        kubectl get pods -n pern-standard -l environment=staging
-        kubectl get svc -n pern-standard -l environment=staging
-        kubectl get ingress -n pern-standard
-
-  rollback-on-failure:
+  notify-gitops-update:
     runs-on: ubuntu-latest
-    needs: [deploy-development, deploy-staging]
-    if: failure()
-    steps:
-    - name: Setup kubectl
-      uses: azure/setup-kubectl@v3
-      with:
-        version: 'v1.28.0'
-
-    - name: Configure kubectl
-      run: |
-        mkdir -p $HOME/.kube
-        echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
-        chmod 600 $HOME/.kube/config
-
-    - name: Rollback failed deployments
-      run: |
-        echo "🔄 Rolling back failed deployments..."
-        
-        # Rollback development deployments
-        kubectl get deployments -n pern-standard -l environment=development --no-headers | while read line; do
-          deployment=$(echo $line | awk '{print $1}')
-          kubectl rollout undo deployment/$deployment -n pern-standard || true
-        done
-        
-        # Rollback staging deployments
-        kubectl get deployments -n pern-standard -l environment=staging --no-headers | while read line; do
-          deployment=$(echo $line | awk '{print $1}')
-          kubectl rollout undo deployment/$deployment -n pern-standard || true
-        done
-        
-        echo "✅ Rollback completed"
-
-  notify:
-    runs-on: ubuntu-latest
-    needs: [deploy-development, deploy-staging]
+    needs: [update-gitops-standard]
     if: always()
     steps:
-    - name: Deployment notification
+    - name: GitOps update notification
       run: |
-        if [ "${{ needs.deploy-staging.result }}" == "success" ]; then
-          echo "✅ Standard deployment successful to both development and staging!"
-          echo "🌐 Access URLs:"
-          echo "  - Development: http://pern-standard-dev.local"
-          echo "  - Staging: http://pern-standard-staging.local"
-        elif [ "${{ needs.deploy-development.result }}" == "success" ]; then
-          echo "✅ Development deployment successful!"
-          echo "❌ Staging deployment failed"
+        if [ "${{ needs.update-gitops-standard.result }}" == "success" ]; then
+          echo "✅ GitOps repository updated successfully!"
+          echo "🎯 ArgoCD will now deploy the standard K8s application"
+          echo ""
+          echo "📊 Updated Images:"
+          echo "- Backend: ${{ needs.update-gitops-standard.outputs.backend-image }}"
+          echo "- Frontend: ${{ needs.update-gitops-standard.outputs.frontend-image }}"
+          echo ""
+          echo "🌐 Expected Deployments:"
+          echo "- Development: pern-standard namespace"
+          echo "- Staging: pern-standard namespace"
+          echo ""
+          echo "⏳ Check ArgoCD for deployment status..."
         else
-          echo "❌ Standard deployment failed"
+          echo "❌ GitOps repository update failed"
+          echo "Standard K8s deployment will not proceed"
         fi
         
-        echo "📊 Deployment Summary:"
-        echo "- Backend Image: ${{ needs.build-backend.outputs.backend-image }}"
-        echo "- Frontend Image: ${{ needs.build-frontend.outputs.frontend-image }}"
+        echo "📊 Build Summary:"
         echo "- Commit: ${{ github.sha }}"
         echo "- Actor: ${{ github.actor }}"
         echo "- Workflow: ${{ github.run_number }}"

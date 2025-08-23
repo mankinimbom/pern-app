@@ -97,9 +97,7 @@ spec:
         name: argocd-image-updater
         ports:
         - containerPort: 8080
-          name: health
-        - containerPort: 8081
-          name: metrics
+          name: http
         readinessProbe:
           httpGet:
             path: /healthz
@@ -227,8 +225,8 @@ metadata:
 spec:
   ports:
   - name: metrics
-    port: 8081
+    port: 8080
     protocol: TCP
-    targetPort: 8081
+    targetPort: 8080
   selector:
     app.kubernetes.io/name: argocd-image-updater

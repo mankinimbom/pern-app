@@ -24,6 +24,8 @@ spec:
         env:
         - name: REACT_APP_API_URL
           value: "http://backend:3001"
+        - name: BACKEND_SERVICE
+          value: "backend"
         resources:
           limits:
             cpu: 200m

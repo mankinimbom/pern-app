@@ -30,10 +30,13 @@ RUN apk update && apk upgrade && \
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy custom nginx config
-COPY nginx.conf /etc/nginx/nginx.conf
+COPY nginx.conf /etc/nginx/nginx.conf.template
 
 # Ensure runtime directories exist (master runs as root)
 RUN mkdir -p /var/cache/nginx /var/log/nginx /var/run/nginx
+
+# Set default backend service name
+ENV BACKEND_SERVICE=backend
 
 # Expose port
 EXPOSE 80
@@ -42,4 +45,5 @@ EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost/health || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+# Start nginx with environment variable substitution
+CMD envsubst '${BACKEND_SERVICE}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g "daemon off;"
